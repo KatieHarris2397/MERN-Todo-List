@@ -1,0 +1,85 @@
+name: Build and Push MERN Docker Images to GHCR
+
+on:
+  workflow_dispatch: # Enable manual trigger
+    inputs:
+      image_tag: # Input parameter for the image tag
+        description: "The tag for the Docker images"
+        required: true
+        default: "latest"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write # Required to push images to GHCR
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Log in to GitHub Container Registry
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 3: Convert repository owner to lowercase (docker image names must all be lowercase)
+      - name: Set repository owner lowercase
+        id: owner_lowercase
+        run: echo "owner_lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      # Step 4: Build the React app
+      - name: Install and Build React App
+        run: |
+          cd react/mern-todo-list
+          npm ci # Install dependencies (prefer ci for CI environments)
+          npm run build # Build the React app
+          cd ../../ # Return to home directory
+
+      # Step 5: Set React image tag
+      - name: Set React Image Tag
+        id: react_tag
+        run: echo "image_tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_ENV
+
+      # Step 6: Build and Push React Docker Image
+      - name: Build and Push React App Image
+        uses: docker/build-push-action@v5
+        with:
+          context: react/mern-todo-list
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ env.owner_lowercase }}/mern-react-todo:${{ env.image_tag }}
+
+      # Step 7: Set Express image tag
+      - name: Set Express Image Tag
+        id: express_tag
+        run: echo "image_tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_ENV
+
+      # Step 8: Build and Push Express Docker Image
+      - name: Build and Push Express App Image
+        uses: docker/build-push-action@v5
+        with:
+          context: express
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ env.owner_lowercase }}/mern-express-todo:${{ env.image_tag }}
+
+      # Step 9: Set Mongo image tag
+      - name: Set Mongo Image Tag
+        id: mongo_tag
+        run: echo "image_tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_ENV
+
+      # Step 10: Build and Push Mongo Docker Image
+      - name: Build and Push Mongo Image
+        uses: docker/build-push-action@v5
+        with:
+          context: mongoDB
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ env.owner_lowercase }}/mern-mongo-todo:${{ env.image_tag }}
